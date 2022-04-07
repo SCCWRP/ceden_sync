@@ -11,5 +11,5 @@ RUN apt install -y python3.8
 RUN apt install -y libpq-dev libssl-dev libcurl4-openssl-dev
 RUN apt install -y python3-pip
 RUN pip3 install ipython pandas sqlalchemy pyarrow fastparquet
-RUN pip3 install wget psycopg2
+RUN pip3 install wget psycopg2 requests
 RUN apt install -y postgresql postgresql-contrib
