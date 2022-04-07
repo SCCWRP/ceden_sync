@@ -3,20 +3,28 @@ import numpy as np
 import wget, zipfile, os, shutil, re, time, gc, sys
 from sqlalchemy import create_engine
 
-from utils import DotDict
+from utils import DotDict, send_mail
+
+# TODO wrap this in a function and call it with parameters
+#   skip_download default false
+#   cutoff year default 1999
+#   datatypes default 'all'
 
 eng = create_engine(os.environ.get("DB_CONNECTION_STRING"))
 
+# TODO download the sampling location info and put into a ceden table (it is a csv file 🤗)
 parquet_links = {
+    # benthic is both MI (bug) taxonomy (data for CSCI) and algae taxonomy (data for ASCI)
+    "benthic"   : "https://data.ca.gov/dataset/c14a017a-8a8c-42f7-a078-3ab64a873e32/resource/eb61f9a1-b1c6-4840-99c7-420a2c494a43/download/benthicdata_parquet_2022-01-07.zip",
     "chemistry" : "https://data.ca.gov/dataset/28d7a81d-6458-47bd-9b79-4fcbfbb88671/resource/f4aa224d-4a59-403d-aad8-187955aa2e38/download/waterchemistrydata_parquet_2022-01-07.zip",
-    "habitat"   : "https://data.ca.gov/dataset/f5edfd1b-a9b3-48eb-a33e-9c246ab85adf/resource/0184c4d0-1e1d-4a33-92ad-e967b5491274/download/habitatdata_parquet_2022-01-07.zip"
+    "habitat"   : "https://data.ca.gov/dataset/f5edfd1b-a9b3-48eb-a33e-9c246ab85adf/resource/0184c4d0-1e1d-4a33-92ad-e967b5491274/download/habitatdata_parquet_2022-01-07.zip",
+    "toxicity"  : "https://data.ca.gov/dataset/c5a4ab7e-4d9b-4b31-bc08-807984d44102/resource/a6c91662-d324-43c2-8166-a94dddd22982/download/toxicitydata_parquet_2022-01-07.zip",
 }
 
-# dictionary will be a storage container for all the massive dataframes
-all_dfs = {}
-schemas = {}
+# store report in list to email at the end
+report = []
 
-
+# TODO we need try except blocks
 # TODO This is a rough draft. There may be a lot of ways to improve this code, and it might need some restructuring
 
 for datatype, link in parquet_links.items():
@@ -24,10 +32,13 @@ for datatype, link in parquet_links.items():
 
     # TODO if the download attempt returns a 404 or something like that, then we should have the thing send an email so we can look into it
     # basically skip downloading if we specified to skip, or if the data is not there
+    # TODO for some reason the sys argv thing is not working correctly
     if (sys.argv[-1] not in ('--skip-download', '--no-download')) or not os.path.exists(newfolder):
-        print("clear the previous raw data and replace with the other data")
-        shutil.rmtree('rawdata')
-        os.mkdir('rawdata')
+
+        if os.path.exists(newfolder):
+            print("clear the previous raw data and replace with the other data")
+            shutil.rmtree(newfolder)
+            os.mkdir(newfolder)
         
         print(f'downloading {datatype} data')
         wget.download(link, f'{newfolder}.zip')
@@ -41,19 +52,16 @@ for datatype, link in parquet_links.items():
     # we will discard data older than the specified cut off year, in this case 1999 (the year should come from Rafi or Eric or someone like that)
     # There is no particular reason why it needs to be sorted
     # right now for testing we will do 2020
-    cutoffyear = 2020
+    cutoffyear = 2021
     discards = sorted([folder for folder in os.listdir(newfolder) if int(re.sub('[^0-9]', '', folder)) < cutoffyear])
-
-    # dir_to_rm = directory to remove
-    for dir_to_rm in discards:
-        shutil.rmtree(os.path.join(newfolder, dir_to_rm))
+    print(discards)
 
     print(f'Reading in all {datatype} data')
     print(f'This may take a few minutes')
     starttime = time.time()
 
     # reads in all the parquet files at once into a dataframe
-    df = pd.concat(
+    ceden_data = pd.concat(
         [
             pd.read_parquet(os.path.join(newfolder, subfolder, filename))
             for subfolder in os.listdir(newfolder)
@@ -62,39 +70,39 @@ for datatype, link in parquet_links.items():
         ignore_index = True
     )
     print(f"Reading {datatype} data took {time.time() - starttime} seconds")
-
-    # store the dataframe in a variable
-    exec(f'all_{datatype} = df')
     
     # lowercase the column names
-    exec(f'all_{datatype}.columns = [c.lower() for c in all_{datatype}.columns]')
+    ceden_data.columns = [c.lower() for c in ceden_data.columns]
 
     # add an id column
     # of course it is not a true ESRI "objectid" column but it will be helpful to have some kind of row identifier
-    exec(f"all_{datatype}['objectid'] = all_{datatype}.index")
+    ceden_data['objectid'] = ceden_data.index
     
-    # store in all_dfs
-    exec(f"all_dfs['{datatype}'] = all_{datatype}")
-
     # Create schema to create table
-    schemas[datatype] = ({
+    # TODO speed this up. the code is not efficient since it runs the same function twice for the same result
+    # i think we should just have it be varchar500 regardless..
+    # but best would be to get max character length and set it to that
+    schema = ({
         col: 
         "TIMESTAMP" 
         if str(typ).startswith('datetime') 
         else "INT" if str(typ).startswith('int') 
         else "NUMERIC(38,8)" if str(typ).startswith('float') 
-        else f"VARCHAR({int(all_dfs[datatype][col].str.len().max()) if not pd.isnull(all_dfs[datatype][col].str.len().max()) else 5})"
-        for col, typ in list(zip(all_dfs[datatype].dtypes.index, all_dfs[datatype].dtypes.values))
+        #else f"VARCHAR({int(ceden_data[col].str.len().max()) if not pd.isnull(ceden_data[col].str.len().max()) else 5})"
+        else f"VARCHAR(500)"
+        for col, typ in list(zip(ceden_data.dtypes.index, ceden_data.dtypes.values))
     })
 
     # recreate table every time to avoid errors on insert. schema gets recreated accordong to the data that was downloaded
+    # TODO write this to a .sql file to save
+    # that way if we dont want to re download the data we also dont have to re create this sql command (which takes a few seconds)
     create_tbl_sql = """
             DROP TABLE IF EXISTS ceden_{}; 
             CREATE TABLE ceden_{} ({});
         """.format(
             datatype,
             datatype,
-            ",\n".join([f'{col} {typ}' for col, typ in schemas[datatype].items()])
+            ",\n".join([f'{col} {typ}' for col, typ in schema.items()])
         )
 
     print(create_tbl_sql)
@@ -104,7 +112,7 @@ for datatype, link in parquet_links.items():
     # write csv to tmp directory with no index or headers
     tmpcsvpath = f'/tmp/{datatype}.csv'
     print(f"write csv to {tmpcsvpath} with no index or headers")
-    all_dfs[datatype].to_csv(tmpcsvpath, index = False, header = False)
+    ceden_data.to_csv(tmpcsvpath, index = False, header = False)
     print("done")
     
 
@@ -114,7 +122,7 @@ for datatype, link in parquet_links.items():
     sqlcmd = f'psql -h {os.environ.get("DB_HOST")} \
             -d {os.environ.get("DB_NAME")} \
             -U {os.environ.get("DB_USER")} \
-            -c "\copy ceden_{datatype} ({",".join(all_dfs[datatype].columns)}) \
+            -c "\copy ceden_{datatype} ({",".join(ceden_data.columns)}) \
             FROM \'{tmpcsvpath}\' csv\"'
     
     print(f"load records to ceden_{datatype}")
@@ -127,10 +135,18 @@ for datatype, link in parquet_links.items():
     print(f"done")
 
     os.remove(tmpcsvpath)
-    print(f"hopefully loaded {len(all_dfs[datatype])} records to ceden_{datatype}.")
+    msg = f"Loaded {len(ceden_data)} records to ceden_{datatype}." if code == 0 else f'Error loading records to ceden_{datatype}'
+    report.append(msg)
+    print(msg)
 
+    # delete variables and collect garbage to hopefully free memory
+    del ceden_data
+    del schema
+    gc.collect()
 
-
+# TODO send with AWS just because
+# anyways we want to start heading that direction so we should figure it out and implement it
+send_mail('admin@checker.sccwrp.org', ['robertb@sccwrp.org'], "CEDEN DATA SYNC REPORT", '\n'.join(report), server = '192.168.1.18')
 
 
 # TODO

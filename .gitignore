@@ -1,4 +1,5 @@
 docker/run.sh
+docker/containeripython.sh
 rawdata/
 __pycache__/
 *.parquet
