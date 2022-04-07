@@ -1,0 +1,5 @@
+docker/run.sh
+rawdata/
+__pycache__/
+*.parquet
+*.csv
