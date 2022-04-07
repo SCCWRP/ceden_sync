@@ -31,7 +31,8 @@ report = []
 broke_links = []
 broken = False
 
-for datatype, link in parquet_links.items():
+for datatype in list(parquet_links):
+    link = parquet_links[datatype]
     try:
         r = requests.get(link,stream=True)
         contenttype = r.headers['Content-Type']
@@ -49,7 +50,6 @@ for datatype, link in parquet_links.items():
         del parquet_links[datatype]
         
         continue
-
 
 sys.exit()
 
