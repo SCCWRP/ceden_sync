@@ -45,5 +45,6 @@ joins = '\n'.join(
     .unique()
 )
 
-sql = f"SELECT \n\t{cols} \nFROM {src_base_table} {joins}"
+sql = f"CREATE OR REPLACE VIEW vw_translated_ceden_habitat AS SELECT \n\t{cols} \nFROM {src_base_table} {joins}"
 print(sql)
+eng.execute(sql)
