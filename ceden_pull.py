@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import wget, zipfile, os, shutil, re, time, gc, sys
 from sqlalchemy import create_engine
+import requests
 
 from utils import DotDict, send_mail
 
@@ -16,8 +17,10 @@ eng = create_engine(os.environ.get("DB_CONNECTION_STRING"))
 parquet_links = {
     # benthic is both MI (bug) taxonomy (data for CSCI) and algae taxonomy (data for ASCI)
     "benthic"   : "https://data.ca.gov/dataset/c14a017a-8a8c-42f7-a078-3ab64a873e32/resource/eb61f9a1-b1c6-4840-99c7-420a2c494a43/download/benthicdata_parquet_2022-01-07.zip",
-    "chemistry" : "https://data.ca.gov/dataset/28d7a81d-6458-47bd-9b79-4fcbfbb88671/resource/f4aa224d-4a59-403d-aad8-187955aa2e38/download/waterchemistrydata_parquet_2022-01-07.zip",
-    "habitat"   : "https://data.ca.gov/dataset/f5edfd1b-a9b3-48eb-a33e-9c246ab85adf/resource/0184c4d0-1e1d-4a33-92ad-e967b5491274/download/habitatdata_parquet_2022-01-07.zip",
+    # "chemistry" : "https://data.ca.gov/dataset/28d7a81d-6458-47bd-9b79-4fcbfbb88671/resource/f4aa224d-4a59-403d-aad8-187955aa2e38/download/waterchemistrydata_parquet_2022-01-07.zip",
+    "chemistry" : "https://www.reddit.com/r/ProgrammerHumor/comments/tyjn1h/helping_my_teammates_remember_what_day_of_the/",
+    # "habitat"   : "https://data.ca.gov/dataset/f5edfd1b-a9b3-48eb-a33e-9c246ab85adf/resource/0184c4d0-1e1d-4a33-92ad-e967b5491274/download/habitatdata_parquet_2022-01-07.zip",
+    "habitat"   : "https://www.reddit.com/r/ProgrammerHumor/comments/tyjn1h/helping_my_teammates_remember_what_day_of_the/",
     "toxicity"  : "https://data.ca.gov/dataset/c5a4ab7e-4d9b-4b31-bc08-807984d44102/resource/a6c91662-d324-43c2-8166-a94dddd22982/download/toxicitydata_parquet_2022-01-07.zip",
 }
 
@@ -27,6 +30,32 @@ report = []
 # TODO we need try except blocks
 # TODO This is a rough draft. There may be a lot of ways to improve this code, and it might need some restructuring
 
+# Purpose:  Check if download links work.
+# Notes:    parquet_links is coerced into a list and then iterated through because we may delete a key if 
+#           its associated link is broken. If you iterate through an dic.items() object, an error is triggered.
+#           python doesn't like that you are changing the size of the dictionary while iterating through.
+for datatype in list(parquet_links):
+    link = parquet_links[datatype]
+    try:
+        r = requests.get(link,stream=True)
+        contenttype = r.headers['Content-Type']
+
+        # The if statement catches most non-downloadable types but there are a few exceptions that trigger an error.
+        # In principle, we are adding another case to all possible exceptions. 
+        if contenttype != 'binary/octet-stream': 
+            raise Exception(f'Content Type was not what we expected. We expected a binary stream but got {contenttype}')
+    except Exception as e:
+        print(f"Exception occurred trying to download {datatype} data")
+        print(e)
+        
+        # add to report
+        report.append(f"Error downloading data for {datatype}\nLink: {link}\nError message: {e}\n\n")
+
+        # Delete key from dictionary
+        del parquet_links[datatype]
+        
+        continue
+
 for datatype, link in parquet_links.items():
     newfolder = f'rawdata/ceden_{datatype}_allyears'
 
@@ -35,6 +64,7 @@ for datatype, link in parquet_links.items():
     # TODO for some reason the sys argv thing is not working correctly
     if (sys.argv[-1] not in ('--skip-download', '--no-download')) or not os.path.exists(newfolder):
 
+        # this was originally here for the case where they didn't specify skip download, but the data is there
         if os.path.exists(newfolder):
             print("clear the previous raw data and replace with the other data")
             shutil.rmtree(newfolder)
@@ -52,9 +82,13 @@ for datatype, link in parquet_links.items():
     # we will discard data older than the specified cut off year, in this case 1999 (the year should come from Rafi or Eric or someone like that)
     # There is no particular reason why it needs to be sorted
     # right now for testing we will do 2020
-    cutoffyear = 2021
+    cutoffyear = 2020
     discards = sorted([folder for folder in os.listdir(newfolder) if int(re.sub('[^0-9]', '', folder)) < cutoffyear])
     print(discards)
+    
+    # 
+    for folder in discards:
+        shutil.rmtree(os.path.join(newfolder, folder))
 
     print(f'Reading in all {datatype} data')
     print(f'This may take a few minutes')
@@ -146,7 +180,9 @@ for datatype, link in parquet_links.items():
 
 # TODO send with AWS just because
 # anyways we want to start heading that direction so we should figure it out and implement it
-send_mail('admin@checker.sccwrp.org', ['robertb@sccwrp.org'], "CEDEN DATA SYNC REPORT", '\n'.join(report), server = '192.168.1.18')
+print("before email")
+send_mail('admin@checker.sccwrp.org', ['kevinl@sccwrp.org'], "CEDEN DATA SYNC REPORT", '\n'.join(report), server = '192.168.1.18')
+print("after email")
 
 
 # TODO

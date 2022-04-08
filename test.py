@@ -28,18 +28,21 @@ report = []
 # TODO we need try except blocks
 # TODO This is a rough draft. There may be a lot of ways to improve this code, and it might need some restructuring
 
-broke_links = []
-broken = False
-
+# Purpose: Check if download links work
+# Notes: parquet_links is coerced into a list and then iterated through because we may delete a key if 
+#           its associated link is broken. If you iterate through an dic.items() object, an error is triggered.
+#           python doesn't like that you are changing the size of the dictionary while iterating through.
 for datatype in list(parquet_links):
     link = parquet_links[datatype]
     try:
         r = requests.get(link,stream=True)
         contenttype = r.headers['Content-Type']
+
+        # The if statement catches most non-downloadable types but there are a few exceptions that trigger an error.
+        # In principle, we are adding another case to all possible exceptions. 
         if contenttype != 'binary/octet-stream': 
             raise Exception(f'Content Type was not what we expected. We expected a binary stream but got {contenttype}')
     except Exception as e:
-        
         print(f"Exception occurred trying to download {datatype} data")
         print(e)
         
@@ -50,12 +53,3 @@ for datatype in list(parquet_links):
         del parquet_links[datatype]
         
         continue
-
-sys.exit()
-
-try:
-    #if "Content-Length" in r.headers:
-    file_size = int(r.headers["Content-Length"])
-except KeyError:
-    # Just a class that I defined to raise an exception if the URL was not downloadable
-    print("Not Downloadable")
