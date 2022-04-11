@@ -1,5 +1,6 @@
 # email routine imports
 import smtplib
+import pandas as pd
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -31,7 +32,57 @@ def send_mail(send_from, send_to, subject, text, filename=None, server="localhos
     smtp.sendmail(send_from, send_to, msg.as_string())
     smtp.close()
 
+def primary_key(table, eng):
+    '''
+    table is the tablename you want the primary key for
+    eng is the database connection
+    '''
+
+    sql = f'''
+        SELECT
+            tc.TABLE_NAME,
+            C.COLUMN_NAME,
+            C.data_type 
+        FROM
+            information_schema.table_constraints tc
+            JOIN information_schema.constraint_column_usage AS ccu USING ( CONSTRAINT_SCHEMA, CONSTRAINT_NAME )
+            JOIN information_schema.COLUMNS AS C ON C.table_schema = tc.CONSTRAINT_SCHEMA 
+            AND tc.TABLE_NAME = C.TABLE_NAME 
+            AND ccu.COLUMN_NAME = C.COLUMN_NAME 
+        WHERE
+            constraint_type = 'PRIMARY KEY' 
+            AND tc.TABLE_NAME = '{table}';
+    '''
+
+    return pd.read_sql(sql, eng).column_name.tolist()
+
+def next_objectid(tablename, conn):
+    reg_ids = pd.read_sql(f"SELECT registration_id, table_name FROM sde.sde_table_registry WHERE table_name = '{tablename}';", conn).registration_id.values
     
+    if (len(reg_ids) > 0):
+        reg_id = reg_ids[0]
+        if not pd.read_sql(f"SELECT * FROM information_schema.tables WHERE table_name = 'i{reg_id}'", conn).empty:
+            return pd.read_sql(f"SELECT base_id FROM i{reg_id}", conn).base_id.values[0]
+
+    # default row id when missing is -220, i think
+    return -220
+
+def registration_id(tablename, conn):
+    reg_ids = pd.read_sql(f"SELECT registration_id, table_name FROM sde.sde_table_registry WHERE table_name = '{tablename}';", conn).registration_id.values
+    
+    if (len(reg_ids) > 0):
+        return reg_ids[0]
+    
+    return None
+    
+
+def exception_handler(func, *args, **kwargs):
+    try:
+        func(*args, **kwargs)
+    except Exception as e:
+        send_mail('admin@checker.sccwrp.org', ['kevinl@sccwrp.org'], "CEDEN DATA SYNC REPORT", str(e)[:1000], server = '192.168.1.18')
+        return e
+
 class DotDict(dict):     
     """dot.notation access to dictionary attributes"""      
     def __getattr__(*args):         
