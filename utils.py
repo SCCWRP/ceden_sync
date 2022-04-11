@@ -80,7 +80,7 @@ def exception_handler(func, *args, **kwargs):
     try:
         func(*args, **kwargs)
     except Exception as e:
-        send_mail('admin@checker.sccwrp.org', ['kevinl@sccwrp.org'], "CEDEN DATA SYNC REPORT", str(e)[:1000], server = '192.168.1.18')
+        send_mail('admin@checker.sccwrp.org', ['kevinl@sccwrp.org'], "ERROR WITH CEDEN DATA SYNC", f"Error occurred in {func.__name__}:\n{str(e)[:1000]}", server = '192.168.1.18')
         return e
 
 class DotDict(dict):     
