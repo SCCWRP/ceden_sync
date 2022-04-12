@@ -7,6 +7,7 @@ from translate import translated_view
 from load import upsert
 from utils import DotDict, send_mail
 
+global eng
 eng = create_engine(os.environ.get("DB_CONNECTION_STRING"))
 
 # TODO download the sampling location info and put into a ceden table (it is a csv file 🤗)
@@ -28,7 +29,6 @@ translation_args = DotDict({
     'src_base_table'      : 'ceden_habitat',
     'translator_table'    : 'ceden_xwalk',
     'translated_viewname' : 'vw_transl_ceden_habitat',
-    'eng'                 : eng,
     'parquet_link'        : "https://data.ca.gov/dataset/f5edfd1b-a9b3-48eb-a33e-9c246ab85adf/resource/0184c4d0-1e1d-4a33-92ad-e967b5491274/download/habitatdata_parquet_2022-01-07.zip",
     'cutoffyear'          : 2020
 })
