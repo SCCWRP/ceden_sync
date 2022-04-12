@@ -7,7 +7,7 @@ from utils import registration_id, primary_key, exception_handler
 eng = create_engine(os.environ.get("DB_CONNECTION_STRING"))
 
 @exception_handler
-def translated_view(dest_table, src_base_table, translator_table, translated_viewname, eng, return_df = False):
+def translated_view(dest_table, src_base_table, translator_table, translated_viewname, eng, *args, **kwargs):
     """
     dest table would be the destination table, src_base_table is the table that we are translating
     It is called src_base_table since it is not a simple translation of those columns but rather a combination of translating and joining with others
@@ -16,6 +16,8 @@ def translated_view(dest_table, src_base_table, translator_table, translated_vie
     translated viewname is the name of the view that will be created
     return_df specifies whether or not the translated dataframe should be returned by the function
     """
+
+    report = []
 
     required_translation_cols = (
         'dest_table','dest_column','src_base_table','src_table','src_column', 'base_join_columns','src_join_columns','special_function','special_value','primary_key'
@@ -95,7 +97,11 @@ def translated_view(dest_table, src_base_table, translator_table, translated_vie
     print("The following sql command will be executed")
     print(sql)
     print("waiting")
-    eng.execute(sql)
+    try:
+        eng.execute(sql)
+        report.append(f"The view {translated_viewname} has been created")
+    except Exception as e:
+        report.append(f"Error creating view {translated_viewname}:\n{str(e)[:250]}")
     print(f"The view {translated_viewname} has been created")
 
     # Create the view to view duplicated records of that data from CEDEN, since duplicates will not be loaded to unified
@@ -109,27 +115,25 @@ def translated_view(dest_table, src_base_table, translator_table, translated_vie
                 COUNT ( * ) OVER ( PARTITION BY {', '.join(primary_key(dest_table, eng))} ) AS COUNT
             FROM
                 sde.{dest_table} 
-            ) tmpcount 
+            ) tmpcount
         WHERE
             tmpcount.COUNT > 1
     """
 
-    print("SQL to be executed to create the duplicated data view:")
-    print(dupsql)
-    eng.execute(dupsql)
+    try:
+        print("SQL to be executed to create the duplicated data view:")
+        print(dupsql)
+        eng.execute(dupsql)
+        report.append(f"The view for the duplicate records, {translated_viewname}_dup has been created")
+        print(f"The view for the duplicate records, {translated_viewname}_dup has been created")
+    except Exception as e:
+        print("Exception occurred")
+        print(e)
+        report.append(f"Error creating view {translated_viewname}_dup:\n{str(e)[:250]}")
+
+    return report
     
 
-    if return_df:
-        print("Querying view to return as a dataframe:")
-        return pd.read_sql(f'SELECT * FROM {translated_viewname}', eng)
+    
 
-
-translation_args = {
-    'dest_table'          : 'unified_phab',
-    'src_base_table'      : 'ceden_habitat',
-    'translator_table'    : 'ceden_xwalk',
-    'translated_viewname' : 'vw_transl_ceden_habitat',
-    'eng'                 : eng,
-    'return_df'           : False
-}
 

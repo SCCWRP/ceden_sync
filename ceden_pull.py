@@ -12,7 +12,7 @@ from utils import DotDict, send_mail, exception_handler
 #   datatypes default 'all'
 
 @exception_handler
-def ceden_pull(parquet_links, eng, cutoffyear = 1999):
+def ceden_pull(parquet_links, eng, *args, cutoffyear = 1999, **kwargs):
     # store report in list to email at the end
     report = []
 

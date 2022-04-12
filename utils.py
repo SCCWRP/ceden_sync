@@ -1,5 +1,6 @@
 # email routine imports
-import smtplib
+import smtplib, inspect
+from sqlite3 import register_adapter
 import pandas as pd
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -56,17 +57,10 @@ def primary_key(table, eng):
 
     return pd.read_sql(sql, eng).column_name.tolist()
 
-def next_objectid(tablename, conn):
-    reg_ids = pd.read_sql(f"SELECT registration_id, table_name FROM sde.sde_table_registry WHERE table_name = '{tablename}';", conn).registration_id.values
-    
-    if (len(reg_ids) > 0):
-        reg_id = reg_ids[0]
-        if not pd.read_sql(f"SELECT * FROM information_schema.tables WHERE table_name = 'i{reg_id}'", conn).empty:
-            return pd.read_sql(f"SELECT base_id FROM i{reg_id}", conn).base_id.values[0]
 
-    # default row id when missing is -220, i think
-    return -220
 
+
+# Get the registration id from the geodatabase
 def registration_id(tablename, conn):
     reg_ids = pd.read_sql(f"SELECT registration_id, table_name FROM sde.sde_table_registry WHERE table_name = '{tablename}';", conn).registration_id.values
     
@@ -76,12 +70,60 @@ def registration_id(tablename, conn):
     return None
     
 
-def exception_handler(func, *args, **kwargs):
-    try:
-        func(*args, **kwargs)
-    except Exception as e:
-        send_mail('admin@checker.sccwrp.org', ['kevinl@sccwrp.org'], "ERROR WITH CEDEN DATA SYNC", f"Error occurred in {func.__name__}:\n{str(e)[:1000]}", server = '192.168.1.18')
-        return e
+
+# Get what the next object ID would be for the table
+def next_objectid(tablename, conn):
+    reg_id = registration_id(tablename, conn)
+    if reg_id:
+        if not pd.read_sql(f"SELECT * FROM information_schema.tables WHERE table_name = 'i{reg_id}'", conn).empty:
+            return pd.read_sql(f"SELECT base_id FROM i{reg_id}", conn).base_id.values[0]
+
+    # default row id when missing is -220, i think
+    return -220
+
+
+
+
+def update_rowid(dest_table, src_table, conn, dest_rowid_column = 'objectid', src_rowid_column = 'objectid'):
+    
+    sql = f"""
+        SELECT MAX(tfinal.objectid) AS objectid FROM 
+            (
+                SELECT t1.{dest_rowid_column} AS objectid FROM {dest_table} t1 UNION SELECT t2.{src_rowid_column} AS objectid FROM {src_table} t2
+            ) tfinal
+        """
+    
+    next_id = pd.read_sql(sql, conn).objectid.values
+
+    if len(next_id) > 0:
+        next_id = next_id[0]
+    else:
+        # inspect.stack()[0][3] gets the current function name
+        raise Exception(f"Error in {inspect.stack()[0][3]}: Query to get next objectid came up empty:\n{sql}")
+
+    reg_id = registration_id(dest_table, conn)
+    if reg_id:
+        conn.execute(f"UPDATE i{reg_id} SET base_id = {next_id}, last_id = {next_id - 1};")
+        return next_id
+    return -1
+    
+
+
+
+def exception_handler(func):
+    def callback(*args, **kwargs):
+        try:
+            report = func(*args, **kwargs)
+            return report
+        except Exception as e:
+            # send_mail('admin@checker.sccwrp.org', ['kevinl@sccwrp.org'], "ERROR WITH CEDEN DATA SYNC", f"Error occurred in {func.__name__}:\n{str(e)[:1000]}", server = '192.168.1.18')
+            
+            # Returns a list to match the output type of the other functions, which also return lists
+            # the lists are to be combined to one list for the final report.
+            # returning the string in the list ensures it can be included in the report
+            print(e)
+            return [f'Unexpected error in {func.__name__}:\nArguments: {args}\n{str(e)[:1000]}']
+    return callback
 
 class DotDict(dict):     
     """dot.notation access to dictionary attributes"""      

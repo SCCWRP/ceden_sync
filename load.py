@@ -2,10 +2,10 @@ from doctest import debug_script
 import pandas as pd
 from sqlalchemy import create_engine
 
-from utils import primary_key, exception_handler
+from utils import primary_key, exception_handler, update_rowid
 
 @exception_handler
-def upsert(src, dest, eng, update = True, conditions = dict()):
+def upsert(src, dest, eng, *args, update = True, conditions = dict(), **kwargs):
     # src is the "from" table and dest is the destination table ("to")
 
     assert type(conditions) == dict, "conditions keyword arg must be a dictionary"
@@ -58,5 +58,13 @@ def upsert(src, dest, eng, update = True, conditions = dict()):
     else:
         sql += 'DO NOTHING;'
 
-    return sql
+    try:
+        update_rowid(dest, src, eng)
+        eng.execute(sql)
+        update_rowid(dest, src, eng)
+        return [f"Data has been transferred from {src} to {dest}, with the exception of duplicate records"]
+    except Exception as e:
+        return [f"Error moving data from {src} to {dest}:\n{str(e)[:500]}"]
+
+
 
