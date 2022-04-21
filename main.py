@@ -22,22 +22,29 @@ parquet_links = {
 # cutoff year for the data, so that data older than 1999 is ignored (2020 for testing purposes)
 CUTOFF_YEAR = 2020
 
-pull_report = ceden_pull(parquet_links, eng, cutoffyear=CUTOFF_YEAR)
 
 translation_args = DotDict({
-    'dest_table'          : 'unified_phab',
-    'src_base_table'      : 'ceden_habitat',
-    'translator_table'    : 'ceden_xwalk',
-    'translated_viewname' : 'vw_transl_ceden_habitat',
-    'parquet_link'        : "https://data.ca.gov/dataset/f5edfd1b-a9b3-48eb-a33e-9c246ab85adf/resource/0184c4d0-1e1d-4a33-92ad-e967b5491274/download/habitatdata_parquet_2022-01-07.zip",
-    'cutoffyear'          : 2020
+    "habitat" : DotDict({
+        'dest_table'          : 'unified_phab',
+        'src_base_table'      : 'ceden_habitat',
+        'translator_table'    : 'ceden_xwalk',
+        'translated_viewname' : 'vw_transl_ceden_habitat',
+        'parquet_link'        : "https://data.ca.gov/dataset/f5edfd1b-a9b3-48eb-a33e-9c246ab85adf/resource/0184c4d0-1e1d-4a33-92ad-e967b5491274/download/habitatdata_parquet_2022-01-07.zip",
+        'cutoffyear'          : 2020
+    })
 })
+report = []
+for dtype in translation_args.keys():
 
-translate_report = translated_view(**translation_args)
+    args = translation_args[dtype]
 
-update_report = upsert(translation_args.translated_viewname, translation_args.dest_table, eng, conditions = {'record_origin':'CEDEN'})
+    pull_report = ceden_pull(dtype, args.parquet_link, eng, cutoffyear=CUTOFF_YEAR)
 
-report = ["CEDEN SYNC REPORT FOR some datatype which will later come from a variable name", *pull_report, *translate_report, *update_report]
+    translate_report = translated_view(eng = eng, **args)
+
+    update_report = upsert(args.translated_viewname, args.dest_table, eng, conditions = {'record_origin':'CEDEN'})
+
+    report = [*report, f"----- CEDEN SYNC REPORT FOR {dtype} -----\n", *pull_report, *translate_report, *update_report, '\n\n']
 
 # TODO We need a table of meta data for this sync routine so we can build a dashboard/webpage
 # There are many many components to the SMC data pipeline and it gets complicated, so we need some kind of reporting web page/web tool for everything

@@ -59,7 +59,6 @@ def primary_key(table, eng):
 
 
 
-
 # Get the registration id from the geodatabase
 def registration_id(tablename, conn):
     reg_ids = pd.read_sql(f"SELECT registration_id, table_name FROM sde.sde_table_registry WHERE table_name = '{tablename}';", conn).registration_id.values
