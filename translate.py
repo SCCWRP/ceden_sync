@@ -32,6 +32,7 @@ def translated_view(dest_table, src_base_table, translator_table, translated_vie
         FROM
             {translator_table}
             INNER JOIN (SELECT * FROM information_schema.COLUMNS WHERE table_name = '{dest_table}') infocols ON {translator_table}.dest_column = infocols.COLUMN_NAME 
+            WHERE {translator_table}.dest_table = '{dest_table}'
         """,
         eng
     )
@@ -70,8 +71,7 @@ def translated_view(dest_table, src_base_table, translator_table, translated_vie
 
     # assertion is made that join columns are same amount and that they are in the correct respective order in each column
     # building the part of the query that will join the data
-    joins = '\n'.join(
-        xwalk[(xwalk.src_table != xwalk.src_base_table) & (~pd.isnull(xwalk.src_table)) & (~pd.isnull(xwalk.src_base_table))].apply(
+    joins = xwalk[(xwalk.src_table != xwalk.src_base_table) & (~pd.isnull(xwalk.src_table)) & (~pd.isnull(xwalk.src_base_table))].apply(
             lambda row:
             "LEFT JOIN {} ON {}".format(
                 row['src_table'],
@@ -88,8 +88,13 @@ def translated_view(dest_table, src_base_table, translator_table, translated_vie
             
             axis = 1
         )
-        .unique()
-    )
+    
+    if not joins.empty:
+        joins = '\n'.join(joins.unique())
+    else:
+        joins = ''
+
+
     # print(joins)
     eng.execute(f'DROP VIEW IF EXISTS {translated_viewname};')
     sql = f"CREATE VIEW {translated_viewname} AS SELECT \n\t{cols} \nFROM {src_base_table} {joins}"

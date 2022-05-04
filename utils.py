@@ -125,7 +125,7 @@ def exception_handler(func):
     return callback
 
 class DotDict(dict):     
-    """dot.notation access to dictionary attributes"""      
+    """dot.notation access to dictionary attributes"""     
     def __getattr__(*args):         
         val = dict.get(*args)         
         return DotDict(val) if type(val) is dict else val      

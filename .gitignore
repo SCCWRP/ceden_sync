@@ -4,3 +4,4 @@ rawdata/
 __pycache__/
 *.parquet
 *.csv
+test.py

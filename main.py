@@ -19,10 +19,6 @@ parquet_links = {
     #"toxicity"  : "https://data.ca.gov/dataset/c5a4ab7e-4d9b-4b31-bc08-807984d44102/resource/a6c91662-d324-43c2-8166-a94dddd22982/download/toxicitydata_parquet_2022-01-07.zip",
 }
 
-# cutoff year for the data, so that data older than 1999 is ignored (2020 for testing purposes)
-CUTOFF_YEAR = 2020
-
-
 translation_args = DotDict({
     "habitat" : DotDict({
         'dest_table'          : 'unified_phab',
@@ -30,7 +26,15 @@ translation_args = DotDict({
         'translator_table'    : 'ceden_xwalk',
         'translated_viewname' : 'vw_transl_ceden_habitat',
         'parquet_link'        : "https://data.ca.gov/dataset/f5edfd1b-a9b3-48eb-a33e-9c246ab85adf/resource/0184c4d0-1e1d-4a33-92ad-e967b5491274/download/habitatdata_parquet_2022-01-07.zip",
-        'cutoffyear'          : 2020
+        'cutoffyear'          : 2000
+    }),
+    "chemistry" : DotDict({
+        'dest_table'          : 'unified_chemistry',
+        'src_base_table'      : 'ceden_chemistry',
+        'translator_table'    : 'ceden_xwalk',
+        'translated_viewname' : 'vw_transl_ceden_chemistry',
+        'parquet_link'        : "https://data.ca.gov/dataset/28d7a81d-6458-47bd-9b79-4fcbfbb88671/resource/f4aa224d-4a59-403d-aad8-187955aa2e38/download/waterchemistrydata_parquet_2022-01-07.zip",
+        'cutoffyear'          : 2000
     })
 })
 report = []
@@ -38,7 +42,8 @@ for dtype in translation_args.keys():
 
     args = translation_args[dtype]
 
-    pull_report = ceden_pull(dtype, args.parquet_link, eng, cutoffyear=CUTOFF_YEAR)
+    #pull_report = ceden_pull(dtype, args.parquet_link, eng, cutoffyear = args.cutoffyear)
+    pull_report = []
 
     translate_report = translated_view(eng = eng, **args)
 
