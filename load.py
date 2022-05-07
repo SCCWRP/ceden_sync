@@ -58,12 +58,17 @@ def upsert(src, dest, eng, *args, update = True, conditions = dict(), **kwargs):
     else:
         sql += 'DO NOTHING;'
 
+    print(f"The following SQL will be executed to move data from {src} to {dest}")
+    print(sql)
+
     try:
         update_rowid(dest, src, eng)
         eng.execute(sql)
         update_rowid(dest, src, eng)
+        print(f"Data has been transferred from {src} to {dest}, with the exception of duplicate records")
         return [f"Data has been transferred from {src} to {dest}, with the exception of duplicate records"]
     except Exception as e:
+        print(e)
         return [f"Error moving data from {src} to {dest}:\n{str(e)[:500]}"]
 
 

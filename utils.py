@@ -124,6 +124,23 @@ def exception_handler(func):
             return [f'Unexpected error in {func.__name__}:\nArguments: {args}\n{str(e)[:1000]}']
     return callback
 
+
+def build_where_clause(conditions):
+    "Builds a SQL WHERE statement from a dictionary of conditions"
+    retval = ' WHERE '
+    retval += ' AND '.join([
+        "{} = {}".format(col, val if isinstance(val,(int, float)) else f"'{val}'")
+        if not isinstance(val, (tuple, list))
+        else 
+        '{} IN ({})'.format(
+            col, 
+            ','.join([f"{v}" if isinstance(v,(int, float)) else f"'{v}'" for v in val])
+        )
+        
+        for col, val in conditions.items()
+    ])
+    return retval
+
 class DotDict(dict):     
     """dot.notation access to dictionary attributes"""     
     def __getattr__(*args):         
