@@ -20,22 +20,22 @@ parquet_links = {
 }
 
 translation_args = DotDict({
-    "habitat" : DotDict({
-        'dest_table'          : 'unified_phab',
-        'src_base_table'      : 'ceden_habitat',
-        'translator_table'    : 'ceden_xwalk',
-        'translated_viewname' : 'vw_transl_ceden_habitat',
-        'parquet_link'        : "https://data.ca.gov/dataset/f5edfd1b-a9b3-48eb-a33e-9c246ab85adf/resource/0184c4d0-1e1d-4a33-92ad-e967b5491274/download/habitatdata_parquet_2022-01-07.zip",
-        'cutoffyear'          : 2015
-    }),
-    "chemistry" : DotDict({
-        'dest_table'          : 'unified_chemistry',
-        'src_base_table'      : 'ceden_chemistry',
-        'translator_table'    : 'ceden_xwalk',
-        'translated_viewname' : 'vw_transl_ceden_chemistry',
-        'parquet_link'        : "https://data.ca.gov/dataset/28d7a81d-6458-47bd-9b79-4fcbfbb88671/resource/f4aa224d-4a59-403d-aad8-187955aa2e38/download/waterchemistrydata_parquet_2022-01-07.zip",
-        'cutoffyear'          : 2015
-    }),
+    # "habitat" : DotDict({
+    #     'dest_table'          : 'unified_phab',
+    #     'src_base_table'      : 'ceden_habitat',
+    #     'translator_table'    : 'ceden_xwalk',
+    #     'translated_viewname' : 'vw_transl_ceden_habitat',
+    #     'parquet_link'        : "https://data.ca.gov/dataset/f5edfd1b-a9b3-48eb-a33e-9c246ab85adf/resource/0184c4d0-1e1d-4a33-92ad-e967b5491274/download/habitatdata_parquet_2022-01-07.zip",
+    #     'cutoffyear'          : 2000
+    # }),
+    # "chemistry" : DotDict({
+    #     'dest_table'          : 'unified_chemistry',
+    #     'src_base_table'      : 'ceden_chemistry',
+    #     'translator_table'    : 'ceden_xwalk',
+    #     'translated_viewname' : 'vw_transl_ceden_chemistry',
+    #     'parquet_link'        : "https://data.ca.gov/dataset/28d7a81d-6458-47bd-9b79-4fcbfbb88671/resource/f4aa224d-4a59-403d-aad8-187955aa2e38/download/waterchemistrydata_parquet_2022-01-07.zip",
+    #     'cutoffyear'          : 2000
+    # }),
     "benthic" : DotDict({
         "taxonomy": DotDict({
             'dest_table'          : 'unified_taxonomy',
@@ -52,7 +52,7 @@ translation_args = DotDict({
             'translator_table'    : 'ceden_xwalk',
             'translated_viewname' : 'vw_transl_ceden_algae',
             'conditions'          : {
-                "lu_collectionmethodxwalk.collectionmethodname": ('Algae_EMAP', 'Algae_EPA_NWS', 'Algae_RWB', 'Algae_SWAMP', 'Algae_RWB1_SFEel', 'Algae_SNARL')
+                "lu_collectionmethodxwalk.collectionmethodname": ('Algae_EMAP', 'Algae_RWB', 'Algae_SWAMP', 'Algae_SCCWRP')
             }
         }),
         'parquet_link'        : "https://data.ca.gov/dataset/c14a017a-8a8c-42f7-a078-3ab64a873e32/resource/eb61f9a1-b1c6-4840-99c7-420a2c494a43/download/benthicdata_parquet_2022-04-14.zip",
@@ -78,8 +78,8 @@ for dtype in translation_args.keys():
             *upsert(args.algae.translated_viewname, args.algae.dest_table, eng, conditions = {'record_origin':'CEDEN'})
         ]
     else: 
+        translate_report = translated_view(eng = eng, **args) 
         update_report = upsert(args.translated_viewname, args.dest_table, eng, conditions = {'record_origin':'CEDEN'})
-        translate_report = translated_view(eng = eng, **args) \
 
 
     report = [*report, f"----- CEDEN SYNC REPORT FOR {dtype} -----\n", *pull_report, *translate_report, *update_report, '\n\n']
